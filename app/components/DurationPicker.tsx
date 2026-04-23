@@ -2,12 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import Mascot from "./Mascot";
+import { HOME } from "../copy";
 
-interface Duration {
+interface DurationStyle {
   seconds: number;
-  label: string;
-  emoji: string;
-  cue: string;
   /** Tailwind gradient classes for the card */
   gradient: string;
   /** Tailwind ring colour for focus */
@@ -16,30 +14,25 @@ interface Duration {
   labelColour: string;
 }
 
-const DURATIONS: Duration[] = [
+/**
+ * Visual styling for each duration card.
+ * Copy (cue + label) comes from HOME.durations in copy.ts.
+ */
+const DURATION_STYLES: DurationStyle[] = [
   {
     seconds: 60,
-    label: "1 min",
-    emoji: "🍎",
-    cue: "Quick snack",
     gradient: "from-orange-300 to-amber-400",
     ring: "focus-visible:outline-orange-500",
     labelColour: "text-orange-900",
   },
   {
     seconds: 120,
-    label: "2 min",
-    emoji: "🦷",
-    cue: "Brush teeth",
     gradient: "from-sky-300 to-cyan-400",
     ring: "focus-visible:outline-cyan-500",
     labelColour: "text-sky-900",
   },
   {
     seconds: 300,
-    label: "5 min",
-    emoji: "📺",
-    cue: "Short show",
     gradient: "from-violet-300 to-purple-400",
     ring: "focus-visible:outline-purple-500",
     labelColour: "text-violet-900",
@@ -73,9 +66,9 @@ function BgBlobs() {
 export default function DurationPicker() {
   const router = useRouter();
 
-  function handlePick(duration: Duration) {
-    sessionStorage.setItem("tg_duration_seconds", String(duration.seconds));
-    sessionStorage.setItem("tg_duration_label", duration.label);
+  function handlePick(seconds: number, label: string) {
+    sessionStorage.setItem("tg_duration_seconds", String(seconds));
+    sessionStorage.setItem("tg_duration_label", label);
     router.push("/game");
   }
 
@@ -92,13 +85,13 @@ export default function DurationPicker() {
           className="text-5xl font-black tracking-tight text-amber-700 drop-shadow-sm"
           style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
         >
-          Time Guesser!
+          {HOME.title}
         </h1>
         <p
           className="max-w-xs text-xl font-bold text-amber-600"
           style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
         >
-          Pick a time and see if you can feel it! ⏰
+          {HOME.subtitle}
         </p>
       </header>
 
@@ -107,69 +100,66 @@ export default function DurationPicker() {
         className="relative z-10 flex w-full max-w-md flex-col gap-5"
         role="list"
       >
-        {DURATIONS.map((d) => (
-          <li key={d.seconds}>
-            <button
-              type="button"
-              onClick={() => handlePick(d)}
-              className={`
-                bg-gradient-to-r ${d.gradient}
-                flex w-full cursor-pointer items-center gap-5
-                rounded-3xl px-7 py-6
-                shadow-lg shadow-black/10
-                transition-all duration-150
-                hover:-translate-y-1 hover:shadow-xl hover:shadow-black/15
-                active:scale-95 active:translate-y-0
-                focus-visible:outline-4 focus-visible:outline-offset-4 ${d.ring}
-              `}
-              aria-label={`${d.cue} — ${d.label}`}
-            >
-              {/* Emoji in a white pill */}
-              <span
-                className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-white/60 text-5xl shadow-sm"
-                aria-hidden="true"
+        {HOME.durations.map((d) => {
+          const style = DURATION_STYLES.find((s) => s.seconds === d.seconds)!;
+          return (
+            <li key={d.seconds}>
+              <button
+                type="button"
+                onClick={() => handlePick(d.seconds, d.label)}
+                className={`
+                  bg-gradient-to-r ${style.gradient}
+                  flex w-full cursor-pointer items-center gap-5
+                  rounded-3xl px-7 py-6
+                  shadow-lg shadow-black/10
+                  transition-all duration-150
+                  hover:-translate-y-1 hover:shadow-xl hover:shadow-black/15
+                  active:scale-95 active:translate-y-0
+                  focus-visible:outline-4 focus-visible:outline-offset-4 ${style.ring}
+                `}
+                aria-label={`${d.cue} — ${d.label}`}
               >
-                {d.emoji}
-              </span>
-
-              {/* Text */}
-              <span className="flex flex-col items-start">
+                {/* Cue text in a white pill (emoji is part of the cue string) */}
                 <span
-                  className={`text-2xl font-black ${d.labelColour}`}
-                  style={{
-                    fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
-                  }}
+                  className={`flex flex-col items-start`}
                 >
-                  {d.cue}
+                  <span
+                    className={`text-2xl font-black ${style.labelColour}`}
+                    style={{
+                      fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
+                    }}
+                  >
+                    {d.cue}
+                  </span>
+                  <span
+                    className={`text-lg font-bold ${style.labelColour} opacity-75`}
+                    style={{
+                      fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
+                    }}
+                  >
+                    {d.label}
+                  </span>
                 </span>
-                <span
-                  className={`text-lg font-bold ${d.labelColour} opacity-75`}
-                  style={{
-                    fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
-                  }}
-                >
-                  {d.label}
-                </span>
-              </span>
 
-              {/* Arrow hint */}
-              <span
-                className={`ml-auto text-3xl ${d.labelColour} opacity-60`}
-                aria-hidden="true"
-              >
-                →
-              </span>
-            </button>
-          </li>
-        ))}
+                {/* Arrow hint */}
+                <span
+                  className={`ml-auto text-3xl ${style.labelColour} opacity-60`}
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
 
-      {/* ── Footer whisper ──────────────────────────────────────────────── */}
+      {/* ── Footer tip ──────────────────────────────────────────────── */}
       <p
         className="relative z-10 text-center text-base font-semibold text-amber-500"
         style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
       >
-        No peeking — trust your tummy! 🦉
+        {HOME.footerTip}
       </p>
     </div>
   );

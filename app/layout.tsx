@@ -11,7 +11,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-yellow-50 text-neutral-900 antialiased">
+      <body
+        className="min-h-screen antialiased"
+        style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+      >
         {children}
       </body>
     </html>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ResultScreen from "../components/ResultScreen";
+import Mascot from "../components/Mascot";
 
 const GRACE_MS = 2_000; // 2-second grace — STOP is inactive during this window
 
@@ -17,6 +18,32 @@ interface Result {
   peeked: boolean;
 }
 
+/** Decorative background blobs */
+function BgBlobs({ active }: { active: boolean }) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 overflow-hidden"
+      aria-hidden="true"
+    >
+      <div
+        className={`absolute -top-24 -left-24 h-80 w-80 rounded-full blur-3xl transition-colors duration-700 ${
+          active ? "bg-red-200 opacity-50" : "bg-yellow-200 opacity-40"
+        }`}
+      />
+      <div
+        className={`absolute -bottom-20 right-0 h-72 w-72 rounded-full blur-3xl transition-colors duration-700 ${
+          active ? "bg-pink-200 opacity-50" : "bg-amber-200 opacity-40"
+        }`}
+      />
+      <div
+        className={`absolute top-1/3 -right-20 h-64 w-64 rounded-full blur-3xl transition-colors duration-700 ${
+          active ? "bg-orange-200 opacity-40" : "bg-sky-200 opacity-30"
+        }`}
+      />
+    </div>
+  );
+}
+
 export default function GamePage() {
   const router = useRouter();
 
@@ -29,22 +56,16 @@ export default function GamePage() {
 
   /**
    * Timestamp (Date.now()) when the hidden countdown started — after grace.
-   * Using a ref (not state) keeps it out of the render cycle and avoids
-   * any batching/closure skew that could distort the measured duration.
    */
   const startRef = useRef<number | null>(null);
 
   /**
    * Tracks whether the user hid the tab during the countdown.
-   * Ref so the visibilitychange handler always sees the latest value
-   * without needing to be re-registered.
    */
   const peekedRef = useRef(false);
 
   /**
-   * Guard against double-taps: flipped to true the moment STOP is pressed.
-   * Using a ref (not state) means the check is synchronous — no re-render
-   * required before the flag is effective.
+   * Guard against double-taps.
    */
   const stoppedRef = useRef(false);
 
@@ -54,7 +75,6 @@ export default function GamePage() {
     const label = sessionStorage.getItem("tg_duration_label") ?? "";
 
     if (!raw || isNaN(Number(raw))) {
-      // Landed here directly without picking — send back to picker
       router.replace("/");
       return;
     }
@@ -68,9 +88,6 @@ export default function GamePage() {
     if (durationSeconds === null) return;
 
     const graceTimer = window.setTimeout(() => {
-      // Record start time with Date.now() for wall-clock accuracy.
-      // performance.now() is relative to page load and can drift when
-      // the tab is throttled; Date.now() gives a stable epoch baseline.
       startRef.current = Date.now();
       peekedRef.current = false;
       stoppedRef.current = false;
@@ -97,12 +114,7 @@ export default function GamePage() {
 
   // ── User taps STOP ───────────────────────────────────────────────────────────
   function handleStop() {
-    // Guard: wrong phase or timer not started
     if (phase !== "active" || startRef.current === null) return;
-
-    // Guard: disable immediately on first press — prevents double-taps.
-    // Checking + setting in the same synchronous call means a rapid second
-    // tap (within the same JS microtask queue flush) is harmless.
     if (stoppedRef.current) return;
     stoppedRef.current = true;
 
@@ -124,8 +136,13 @@ export default function GamePage() {
   // ── Render: loading / redirecting ───────────────────────────────────────────
   if (durationSeconds === null) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-yellow-50">
-        <span className="text-2xl">Loading…</span>
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-yellow-50 to-amber-50">
+        <span
+          className="text-2xl font-bold text-amber-600"
+          style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+        >
+          Loading…
+        </span>
       </div>
     );
   }
@@ -146,37 +163,91 @@ export default function GamePage() {
   const isGrace = phase === "grace";
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-yellow-50 p-6">
-      <p className="text-xl font-semibold text-neutral-500">
-        {isGrace ? "Get ready…" : `Guessing ${durationLabel}`}
+    <div
+      className={`relative flex min-h-screen flex-col items-center justify-center gap-8 overflow-hidden px-6 py-10 transition-colors duration-700 ${
+        isGrace
+          ? "bg-gradient-to-b from-yellow-50 via-amber-50 to-orange-50"
+          : "bg-gradient-to-b from-red-50 via-rose-50 to-pink-50"
+      }`}
+    >
+      <BgBlobs active={!isGrace} />
+
+      {/* Mascot */}
+      <div className="relative z-10">
+        <Mascot mood={isGrace ? "waiting" : "counting"} size={160} />
+      </div>
+
+      {/* Status text */}
+      <p
+        className={`relative z-10 text-center text-2xl font-black transition-colors duration-500 ${
+          isGrace ? "text-amber-600" : "text-rose-600"
+        }`}
+        style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+      >
+        {isGrace ? "Get ready…" : `Guessing ${durationLabel} 🎯`}
       </p>
 
-      {/* Giant STOP button — fills most of the viewport */}
-      <button
-        type="button"
-        onClick={handleStop}
-        disabled={isGrace}
-        aria-label="Stop — tap when you think the time is up"
-        className={`
-          flex h-72 w-72 items-center justify-center
-          rounded-full text-6xl font-extrabold text-white shadow-2xl
-          transition-transform duration-100
-          sm:h-96 sm:w-96
-          ${
+      {/* Giant STOP / waiting button */}
+      <div className="relative z-10">
+        <button
+          type="button"
+          onClick={handleStop}
+          disabled={isGrace}
+          aria-label={
             isGrace
-              ? "cursor-not-allowed bg-neutral-300"
-              : "cursor-pointer bg-red-500 animate-pulse active:scale-95"
+              ? "Wait — the timer is not ready yet"
+              : "Stop — tap when you think the time is up"
           }
-        `}
-      >
-        {isGrace ? "⏳" : "STOP"}
-      </button>
+          className={`
+            relative flex items-center justify-center
+            rounded-full font-black text-white shadow-2xl
+            transition-all duration-200
+            h-64 w-64 text-5xl
+            sm:h-80 sm:w-80 sm:text-6xl
+            ${
+              isGrace
+                ? "cursor-not-allowed bg-neutral-300 shadow-neutral-200"
+                : "cursor-pointer bg-red-500 active:scale-95 animate-ring-pulse"
+            }
+          `}
+          style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+        >
+          {/* Inner circle highlight */}
+          <span
+            className={`absolute inset-4 rounded-full ${
+              isGrace ? "bg-neutral-200/50" : "bg-red-400/40"
+            }`}
+            aria-hidden="true"
+          />
+          {/* Label */}
+          <span className="relative z-10 flex flex-col items-center gap-1">
+            {isGrace ? (
+              <>
+                <span className="animate-wobble inline-block text-6xl sm:text-7xl">
+                  ⏳
+                </span>
+              </>
+            ) : (
+              <>
+                <span>STOP</span>
+                <span className="text-2xl sm:text-3xl">👋</span>
+              </>
+            )}
+          </span>
+        </button>
+      </div>
 
-      {isGrace && (
-        <p className="text-center text-lg text-neutral-400">
-          The button will light up when you can tap…
-        </p>
-      )}
+      {/* Hint text */}
+      <p
+        className={`relative z-10 max-w-xs text-center text-lg font-bold transition-opacity duration-500 ${
+          isGrace ? "text-amber-500" : "text-rose-400 opacity-80"
+        }`}
+        style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+      >
+        {isGrace
+          ? "The button will glow when you can tap!"
+          : "Tap STOP when you feel the time is up!"}
+      </p>
     </div>
   );
 }

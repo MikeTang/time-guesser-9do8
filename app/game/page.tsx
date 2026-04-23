@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import ResultScreen from "../components/ResultScreen";
 
 const GRACE_MS = 2_000; // 2-second grace — STOP is inactive during this window
 
@@ -15,22 +16,6 @@ interface Result {
   /** True when the kid switched tabs during the countdown */
   peeked: boolean;
 }
-
-/** Star rating: 3 = within 10 %, 2 = within 25 %, 1 = within 50 %, 0 = missed */
-function rateGuess(elapsed: number, target: number): 0 | 1 | 2 | 3 {
-  const ratio = elapsed / target;
-  if (ratio >= 0.9 && ratio <= 1.1) return 3;
-  if (ratio >= 0.75 && ratio <= 1.25) return 2;
-  if (ratio >= 0.5 && ratio <= 1.5) return 1;
-  return 0;
-}
-
-const MESSAGES: Record<0 | 1 | 2 | 3, string> = {
-  3: "Almost perfect! ⭐⭐⭐",
-  2: "So close! ⭐⭐",
-  1: "Nice try! ⭐",
-  0: "Keep practising! 🙌",
-};
 
 export default function GamePage() {
   const router = useRouter();
@@ -147,27 +132,13 @@ export default function GamePage() {
 
   // ── Render: result screen ───────────────────────────────────────────────────
   if (phase === "result" && result !== null) {
-    const stars = rateGuess(result.elapsed, result.target);
-    const message = result.peeked ? "You peeked! 👀" : MESSAGES[stars];
-
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-yellow-50 p-6">
-        <p className="text-center text-4xl font-extrabold text-neutral-800">
-          {message}
-        </p>
-        {result.peeked && (
-          <p className="text-center text-lg text-neutral-500">
-            No sneaking — you switched tabs! Try again with your eyes away 🙈
-          </p>
-        )}
-        <button
-          type="button"
-          onClick={handlePlayAgain}
-          className="rounded-3xl bg-green-400 px-10 py-5 text-2xl font-extrabold text-neutral-900 shadow-md transition-transform active:scale-95"
-        >
-          Play again 🔄
-        </button>
-      </div>
+      <ResultScreen
+        elapsed={result.elapsed}
+        target={result.target}
+        peeked={result.peeked}
+        onPlayAgain={handlePlayAgain}
+      />
     );
   }
 
@@ -177,48 +148,35 @@ export default function GamePage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-yellow-50 p-6">
       <p className="text-xl font-semibold text-neutral-500">
-        Guessing <strong>{durationLabel}</strong>…
+        {isGrace ? "Get ready…" : `Guessing ${durationLabel}`}
       </p>
 
-      {/*
-       * The button is disabled during grace AND after the first STOP press.
-       * `stoppedRef.current` is a ref so it can't drive JSX re-renders directly;
-       * phase transition to "result" handles the visual change instead.
-       * Disabling during grace (isGrace) gives the correct cursor/opacity.
-       */}
+      {/* Giant STOP button — fills most of the viewport */}
       <button
         type="button"
         onClick={handleStop}
         disabled={isGrace}
-        aria-label={isGrace ? "Get ready…" : "Stop the timer"}
+        aria-label="Stop — tap when you think the time is up"
         className={`
-          relative flex aspect-square w-72 flex-col items-center justify-center
-          rounded-full shadow-2xl
+          flex h-72 w-72 items-center justify-center
+          rounded-full text-6xl font-extrabold text-white shadow-2xl
           transition-transform duration-100
+          sm:h-96 sm:w-96
           ${
             isGrace
-              ? "cursor-not-allowed bg-red-200 opacity-60"
-              : "cursor-pointer bg-red-500 active:scale-95"
+              ? "cursor-not-allowed bg-neutral-300"
+              : "cursor-pointer bg-red-500 animate-pulse active:scale-95"
           }
         `}
       >
-        {/* Pulse ring — only when active */}
-        {!isGrace && (
-          <span className="absolute inset-0 animate-ping rounded-full bg-red-400 opacity-40" />
-        )}
-        <span className="relative text-6xl font-black text-white select-none">
-          {isGrace ? "⏳" : "STOP"}
-        </span>
-        {isGrace && (
-          <span className="relative mt-2 text-lg font-semibold text-neutral-600">
-            Get ready…
-          </span>
-        )}
+        {isGrace ? "⏳" : "STOP"}
       </button>
 
-      <p className="text-sm text-neutral-400">
-        {isGrace ? "Hold on a moment!" : "Tap when you think the time is up!"}
-      </p>
+      {isGrace && (
+        <p className="text-center text-lg text-neutral-400">
+          The button will light up when you can tap…
+        </p>
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Mascot from "./Mascot";
+import { RESULT_TIERS, PEEKED, MISC } from "../copy";
 
 interface Props {
   elapsed: number; // seconds the user actually waited
@@ -13,7 +14,10 @@ interface Props {
  * Classify the guess into a star rating using absolute-second thresholds
  * that are age-appropriate for 5–8 year olds (not percentage-based).
  *
- * ≤5 s off → 3 stars, ≤15 s off → 2 stars, ≤30 s off → 1 star, else 0
+ * ≤5 s off  → 3 stars ("nailed it")
+ * ≤15 s off → 2 stars ("very close")
+ * ≤30 s off → 1 star  ("good effort")
+ * >30 s off → 0 stars ("keep going")
  */
 export function rateGuess(elapsed: number, target: number): 0 | 1 | 2 | 3 {
   const diff = Math.abs(elapsed - target);
@@ -23,23 +27,9 @@ export function rateGuess(elapsed: number, target: number): 0 | 1 | 2 | 3 {
   return 0;
 }
 
-/**
- * Plain-English description of how close the guess was.
- */
-function buildDescription(elapsed: number, target: number): string {
-  const diff = elapsed - target; // positive = too slow, negative = too fast
-  const absSec = Math.round(Math.abs(diff));
-
-  if (absSec <= 1) return "Right on time! 🎯";
-  const dir = diff > 0 ? "too slow" : "too fast";
-  return `${absSec} second${absSec !== 1 ? "s" : ""} ${dir}!`;
-}
-
-const STAR_CONFIG: Record<
+const VISUAL_CONFIG: Record<
   0 | 1 | 2 | 3,
   {
-    stars: string;
-    headline: string;
     bg: string;
     blobA: string;
     blobB: string;
@@ -48,8 +38,6 @@ const STAR_CONFIG: Record<
   }
 > = {
   3: {
-    stars: "⭐⭐⭐",
-    headline: "Almost perfect!",
     bg: "from-yellow-50 via-amber-50 to-orange-50",
     blobA: "bg-yellow-200",
     blobB: "bg-amber-300",
@@ -57,8 +45,6 @@ const STAR_CONFIG: Record<
     btnGradient: "from-green-400 to-emerald-500",
   },
   2: {
-    stars: "⭐⭐",
-    headline: "So close!",
     bg: "from-sky-50 via-cyan-50 to-blue-50",
     blobA: "bg-sky-200",
     blobB: "bg-cyan-200",
@@ -66,8 +52,6 @@ const STAR_CONFIG: Record<
     btnGradient: "from-green-400 to-emerald-500",
   },
   1: {
-    stars: "⭐",
-    headline: "Nice try!",
     bg: "from-orange-50 via-amber-50 to-yellow-50",
     blobA: "bg-orange-200",
     blobB: "bg-yellow-200",
@@ -75,8 +59,6 @@ const STAR_CONFIG: Record<
     btnGradient: "from-green-400 to-emerald-500",
   },
   0: {
-    stars: "🙌",
-    headline: "Keep practising!",
     bg: "from-pink-50 via-rose-50 to-fuchsia-50",
     blobA: "bg-pink-200",
     blobB: "bg-fuchsia-200",
@@ -147,15 +129,15 @@ export default function ResultScreen({
   peeked,
   onPlayAgain,
 }: Props) {
-  const stars = peeked ? (0 as const) : rateGuess(elapsed, target);
-  const config = STAR_CONFIG[stars];
-  const description = buildDescription(elapsed, target);
+  const starRating = peeked ? (0 as const) : rateGuess(elapsed, target);
+  const copy = RESULT_TIERS[starRating];
+  const visual = VISUAL_CONFIG[starRating];
 
   return (
     <div
-      className={`relative flex min-h-screen flex-col items-center justify-center gap-7 overflow-hidden bg-gradient-to-b ${config.bg} px-8 py-10`}
+      className={`relative flex min-h-screen flex-col items-center justify-center gap-7 overflow-hidden bg-gradient-to-b ${visual.bg} px-8 py-10`}
     >
-      <ResultBlobs blobA={config.blobA} blobB={config.blobB} />
+      <ResultBlobs blobA={visual.blobA} blobB={visual.blobB} />
 
       {/* Mascot celebrating */}
       <div className="relative z-10">
@@ -165,30 +147,28 @@ export default function ResultScreen({
       {/* Stars / trophy emoji */}
       <div
         className="relative z-10"
-        aria-label={`${stars} star${stars !== 1 ? "s" : ""}`}
+        aria-label={`${starRating} star${starRating !== 1 ? "s" : ""}`}
       >
-        <StarDisplay stars={config.stars} />
+        <StarDisplay stars={copy.stars} />
       </div>
 
       {/* Headline */}
       <p
-        className={`relative z-10 text-center text-4xl font-black sm:text-5xl ${config.headlineColour} drop-shadow-sm`}
+        className={`relative z-10 text-center text-4xl font-black sm:text-5xl ${visual.headlineColour} drop-shadow-sm`}
         style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
       >
-        {config.headline}
+        {copy.headline}
       </p>
 
-      {/* Plain-English description */}
-      {!peeked && (
-        <p
-          className="relative z-10 text-center text-2xl font-bold text-neutral-600"
-          style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
-        >
-          {description}
-        </p>
-      )}
+      {/* Encouraging detail line — no raw numbers, just warm words */}
+      <p
+        className="relative z-10 text-center text-2xl font-bold text-neutral-600"
+        style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
+      >
+        {copy.detail}
+      </p>
 
-      {/* Peeked warning — kept positive and playful */}
+      {/* "You peeked!" warning — warm, never scolding */}
       {peeked && (
         <div className="relative z-10 max-w-xs rounded-3xl bg-white/70 px-6 py-4 text-center shadow-md backdrop-blur-sm">
           <p
@@ -197,7 +177,7 @@ export default function ResultScreen({
               fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
             }}
           >
-            Oops — you switched tabs! 🙈
+            {PEEKED.heading}
           </p>
           <p
             className="mt-1 text-lg font-semibold text-neutral-500"
@@ -205,7 +185,7 @@ export default function ResultScreen({
               fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif",
             }}
           >
-            Try again and keep your eyes away!
+            {PEEKED.encouragement}
           </p>
         </div>
       )}
@@ -216,7 +196,7 @@ export default function ResultScreen({
         onClick={onPlayAgain}
         className={`
           relative z-10 mt-2
-          bg-gradient-to-r ${config.btnGradient}
+          bg-gradient-to-r ${visual.btnGradient}
           cursor-pointer rounded-3xl px-12 py-6
           text-3xl font-black text-white
           shadow-lg shadow-green-300/50
@@ -227,7 +207,7 @@ export default function ResultScreen({
         `}
         style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
       >
-        Play again! 🔄
+        {MISC.playAgain}
       </button>
     </div>
   );

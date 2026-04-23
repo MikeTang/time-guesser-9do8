@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ResultScreen from "../components/ResultScreen";
 import Mascot from "../components/Mascot";
+import { GRACE, ACTIVE, MISC } from "../copy";
 
 const GRACE_MS = 2_000; // 2-second grace — STOP is inactive during this window
 
@@ -141,7 +142,7 @@ export default function GamePage() {
           className="text-2xl font-bold text-amber-600"
           style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
         >
-          Loading…
+          {MISC.loading}
         </span>
       </div>
     );
@@ -184,7 +185,7 @@ export default function GamePage() {
         }`}
         style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
       >
-        {isGrace ? "Get ready…" : `Guessing ${durationLabel} 🎯`}
+        {isGrace ? GRACE.statusText : ACTIVE.statusText(durationLabel)}
       </p>
 
       {/* Giant STOP / waiting button */}
@@ -193,11 +194,7 @@ export default function GamePage() {
           type="button"
           onClick={handleStop}
           disabled={isGrace}
-          aria-label={
-            isGrace
-              ? "Wait — the timer is not ready yet"
-              : "Stop — tap when you think the time is up"
-          }
+          aria-label={isGrace ? MISC.graceAriaLabel : ACTIVE.stopAriaLabel}
           className={`
             relative flex items-center justify-center
             rounded-full font-black text-white shadow-2xl
@@ -244,9 +241,7 @@ export default function GamePage() {
         }`}
         style={{ fontFamily: "'Nunito', ui-rounded, system-ui, sans-serif" }}
       >
-        {isGrace
-          ? "The button will glow when you can tap!"
-          : "Tap STOP when you feel the time is up!"}
+        {isGrace ? GRACE.hint : ACTIVE.hint}
       </p>
     </div>
   );

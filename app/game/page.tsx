@@ -12,6 +12,8 @@ interface Result {
   elapsed: number;
   /** Target seconds */
   target: number;
+  /** True when the kid switched tabs during the countdown */
+  peeked: boolean;
 }
 
 /** Star rating: 3 = within 10 %, 2 = within 25 %, 1 = within 50 %, 0 = missed */
@@ -40,8 +42,26 @@ export default function GamePage() {
   const [phase, setPhase] = useState<Phase>("grace");
   const [result, setResult] = useState<Result | null>(null);
 
-  // Timestamp when the hidden countdown actually started (after grace)
+  /**
+   * Timestamp (Date.now()) when the hidden countdown started — after grace.
+   * Using a ref (not state) keeps it out of the render cycle and avoids
+   * any batching/closure skew that could distort the measured duration.
+   */
   const startRef = useRef<number | null>(null);
+
+  /**
+   * Tracks whether the user hid the tab during the countdown.
+   * Ref so the visibilitychange handler always sees the latest value
+   * without needing to be re-registered.
+   */
+  const peekedRef = useRef(false);
+
+  /**
+   * Guard against double-taps: flipped to true the moment STOP is pressed.
+   * Using a ref (not state) means the check is synchronous — no re-render
+   * required before the flag is effective.
+   */
+  const stoppedRef = useRef(false);
 
   // ── Read sessionStorage on mount (client-only) ──────────────────────────────
   useEffect(() => {
@@ -63,19 +83,51 @@ export default function GamePage() {
     if (durationSeconds === null) return;
 
     const graceTimer = window.setTimeout(() => {
-      startRef.current = performance.now();
+      // Record start time with Date.now() for wall-clock accuracy.
+      // performance.now() is relative to page load and can drift when
+      // the tab is throttled; Date.now() gives a stable epoch baseline.
+      startRef.current = Date.now();
+      peekedRef.current = false;
+      stoppedRef.current = false;
       setPhase("active");
     }, GRACE_MS);
 
     return () => clearTimeout(graceTimer);
   }, [durationSeconds]);
 
+  // ── Tab-switch detection ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (phase !== "active") return;
+
+    function onVisibilityChange() {
+      if (document.hidden) {
+        peekedRef.current = true;
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [phase]);
+
   // ── User taps STOP ───────────────────────────────────────────────────────────
   function handleStop() {
+    // Guard: wrong phase or timer not started
     if (phase !== "active" || startRef.current === null) return;
 
-    const elapsed = (performance.now() - startRef.current) / 1_000;
-    setResult({ elapsed, target: durationSeconds! });
+    // Guard: disable immediately on first press — prevents double-taps.
+    // Checking + setting in the same synchronous call means a rapid second
+    // tap (within the same JS microtask queue flush) is harmless.
+    if (stoppedRef.current) return;
+    stoppedRef.current = true;
+
+    const elapsed = (Date.now() - startRef.current) / 1_000;
+
+    setResult({
+      elapsed,
+      target: durationSeconds!,
+      peeked: peekedRef.current,
+    });
     setPhase("result");
   }
 
@@ -96,18 +148,18 @@ export default function GamePage() {
   // ── Render: result screen ───────────────────────────────────────────────────
   if (phase === "result" && result !== null) {
     const stars = rateGuess(result.elapsed, result.target);
-    const message = MESSAGES[stars];
+    const message = result.peeked ? "You peeked! 👀" : MESSAGES[stars];
 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-yellow-50 p-6">
         <p className="text-center text-4xl font-extrabold text-neutral-800">
           {message}
         </p>
-        <p className="text-center text-lg text-neutral-500">
-          You waited{" "}
-          <strong>{Math.round(result.elapsed)}s</strong> out of{" "}
-          <strong>{result.target}s</strong>
-        </p>
+        {result.peeked && (
+          <p className="text-center text-lg text-neutral-500">
+            No sneaking — you switched tabs! Try again with your eyes away 🙈
+          </p>
+        )}
         <button
           type="button"
           onClick={handlePlayAgain}
@@ -128,6 +180,12 @@ export default function GamePage() {
         Guessing <strong>{durationLabel}</strong>…
       </p>
 
+      {/*
+       * The button is disabled during grace AND after the first STOP press.
+       * `stoppedRef.current` is a ref so it can't drive JSX re-renders directly;
+       * phase transition to "result" handles the visual change instead.
+       * Disabling during grace (isGrace) gives the correct cursor/opacity.
+       */}
       <button
         type="button"
         onClick={handleStop}
